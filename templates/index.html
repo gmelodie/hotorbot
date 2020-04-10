@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+
+{% block content %}
+
+<form action="/vote" method="post">
+  <br>
+  <h3 class="text-info"> {{ lang }} </h3>
+  <br>
+  <input type="submit" class="btn btn-secondary" name="hot" value="Not"></input>
+  <input type="submit" class="btn btn-danger" name="hot" value="Hot"></input>
+  <input type="hidden" name="lang" value="{{ lang }}">
+</form>
+<br>
+<a href="/results" class="btn btn-primary">Results</a>
+
+
+{% endblock %}

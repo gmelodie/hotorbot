@@ -1,0 +1,21 @@
+
+{% extends "base.html" %}
+
+
+{% block content %}
+
+
+  {% for lang in hots %}
+  <p>
+    <b>{{ lang.0 }}</b> <br>
+    <b> Hots: </b> {{ lang[1][0] }} <br>
+    <b> Nots: </b> {{ lang[1][1] }} <br>
+  </p>
+  {% endfor %}
+
+
+{% endblock %}
+
+
+
+
