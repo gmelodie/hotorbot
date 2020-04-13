@@ -7,12 +7,16 @@
   <br>
   <h3 class="text-info"> {{ lang }} </h3>
   <br>
-  <input type="submit" class="btn btn-secondary" name="hot" value="Not"></input>
-  <input type="submit" class="btn btn-danger" name="hot" value="Hot"></input>
-  <input type="hidden" name="lang" value="{{ lang }}">
+  <div class="row justify-content-center">
+    <input type="submit" class="col-4 col-md-3 btn btn-secondary" name="hot" value="Not"></input>
+    <input type="submit" class="col-4 col-md-3 btn btn-danger" name="hot" value="Hot"></input>
+    <input type="hidden" name="lang" value="{{ lang }}">
+  </div>
 </form>
 <br>
-<a href="/results" class="btn btn-primary">Results</a>
+<div class="row justify-content-center">
+  <a href="/results" class="col-4 col-md-4 btn btn-primary">Results</a>
+</div>
 
 
 {% endblock %}
