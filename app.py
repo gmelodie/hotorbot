@@ -1,35 +1,46 @@
 import random
+import os
+import hashlib
+import time
+from collections import defaultdict
 
-from flask import Flask
-from flask import request
-from flask import render_template
+from flask import Flask, request, render_template
+from flask import redirect, session, make_response, url_for
 from werkzeug.exceptions import HTTPException
 
 
 app = Flask(__name__)
 
+
+try:
+    SESSION_KEY = os.environ['HOB_SESS_SEED']
+    app.secret_key = os.environ['HOB_SESS_SEED'].encode('utf-8')
+except KeyError:
+    print("Couldn't find $HOB_SESS_SEED env var. Is it set?")
+    exit(1)
+
+
 # lang, hot, not
-langs = {'Python 2': [0, 0],
-         'Python 3': [0, 0],
-         'Rust': [0, 0],
-         'PHP': [0, 0],
-         'Objective-C': [0, 0],
-         'SQL': [0, 0],
-         'Ruby': [0, 0],
-         'R': [0, 0],
-         'Matlab': [0, 0],
-         'Assembly': [0, 0],
-         'Perl': [0, 0],
-         'Swift': [0, 0],
-         'Kotlin': [0, 0],
-         'Elixir': [0, 0],
-         'Go': [0, 0],
-         'C': [0, 0],
-         'C++': [0, 0],
-         'C#': [0, 0],
-         'Java': [0, 0],
-         'JavaScript': [0, 0],
-        }
+langs = set(['Python',
+         'Rust',
+         'PHP',
+         'Objective-C',
+         'SQL',
+         'Ruby',
+         'R',
+         'Matlab',
+         'Assembly',
+         'Perl',
+         'Swift',
+         'Kotlin',
+         'Elixir',
+         'Go',
+         'C',
+         'C++',
+         'C#',
+         'Java',
+         'JavaScript',
+        ])
 
 funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
                      505, 503, 501, 529]
@@ -37,10 +48,21 @@ funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
 
 @app.route('/results')
 def results():
-    hots = list(langs.items())
-    hots.sort(key=lambda x:x[1][0], reverse=True)
+    res = defaultdict(lambda: [0, 0])
+    with open('results.dat', 'r') as fp:
+        for line in fp:
+            lang, vote = line.split()
+            if vote == 'Hot':
+                res[lang][0] += 1
+            elif vote == 'Not':
+                res[lang][1] += 1
+            else:
+                print("Neither 'Hot' nor 'Not', got: " + vote)
 
-    return render_template('results.html', hots=hots)
+    res = list(res.items())
+    res.sort(key=lambda x:x[1][0], reverse=True)
+
+    return render_template('results.html', res=res)
 
 
 @app.errorhandler(HTTPException)
@@ -56,27 +78,33 @@ def vote():
 
     lang = request.form['lang']
 
-    hot = False
-    if request.form['hot'] == 'Hot':
-        hot = True
-
     if lang not in langs or \
             request.form['hot'] not in ['Hot', 'Not']:
         return handle_exception(None)
 
-    print(lang, hot)
+    print(lang, request.form['hot'])
 
-    if hot:
-        langs[lang][0] += 1
-    else:
-        langs[lang][1] += 1
+    with open('results.dat', 'a') as fp:
+        fp.write(lang + ' ' + request.form['hot'] + '\n')
 
-    return render_template('index.html', lang=random.choice(list(langs.keys())))
+    session['langi'] += 1
+    return redirect(url_for('index'))
 
 
 @app.route('/')
 def index():
-    return render_template('index.html', lang=random.choice(list(langs.keys())))
+    if 'userid' not in session:
+        ts = str(time.time())
+        full_key = (ts+SESSION_KEY).encode('utf-8')
+        session['userid'] = hashlib.sha512(full_key).hexdigest()
+        session['langi'] = 0
+
+    i = session['langi']
+    print(session['userid'], session['langi'])
+    if i >= len(langs):
+        return render_template('thx.html')
+
+    return render_template('index.html', lang=list(langs)[i])
 
 
 if __name__ == '__main__':
