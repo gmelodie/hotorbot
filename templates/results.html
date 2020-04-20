@@ -9,8 +9,8 @@
   {% for lang in res %}
   <p>
     <b>{{ lang.0 }}</b> <br>
-    <b> Hots: </b> {{ lang[1][0] }} <br>
-    <b> Nots: </b> {{ lang[1][1] }} <br>
+    <b> Hots: </b> {{ lang.1 }} <br>
+    <b> Nots: </b> {{ lang.2 }} <br>
   </p>
   {% endfor %}
 

@@ -2,6 +2,7 @@ import random
 import os
 import hashlib
 import time
+import psycopg2
 from collections import defaultdict
 
 from flask import Flask, request, render_template
@@ -13,10 +14,11 @@ app = Flask(__name__)
 
 
 try:
+    DATABASE_URL = os.environ['DATABASE_URL']
     SESSION_KEY = os.environ['HOB_SESS_SEED']
     app.secret_key = os.environ['HOB_SESS_SEED'].encode('utf-8')
 except KeyError:
-    print("Couldn't find $HOB_SESS_SEED env var. Is it set?")
+    print("Couldn't find some env vars. Are (all of) them set?")
     exit(1)
 
 
@@ -48,19 +50,16 @@ funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
 
 @app.route('/results')
 def results():
-    res = defaultdict(lambda: [0, 0])
-    with open('results.dat', 'r') as fp:
-        for line in fp:
-            lang, vote = line.split()
-            if vote == 'Hot':
-                res[lang][0] += 1
-            elif vote == 'Not':
-                res[lang][1] += 1
-            else:
-                print("Neither 'Hot' nor 'Not', got: " + vote)
+    count_hots_and_nots_query = "SELECT language, \
+                                COUNT(CASE WHEN hot THEN 1 END) as hot, \
+                                COUNT(CASE WHEN NOT hot THEN 1 END) as not_hot \
+                                FROM votes GROUP BY language \
+                                ORDER BY hot DESC, not_hot ASC;"
 
-    res = list(res.items())
-    res.sort(key=lambda x:x[1][0], reverse=True)
+    with psycopg2.connect(DATABASE_URL, sslmode='require') as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(count_hots_and_nots_query)
+            res = cursor.fetchall()
 
     return render_template('results.html', res=res)
 
@@ -73,6 +72,7 @@ def handle_exception(e):
 @app.route('/vote', methods=['POST'])
 def vote():
 
+    # Check input (no funky stuff)
     if 'lang' not in request.form or 'hot' not in request.form:
         return handle_exception(None)
 
@@ -82,10 +82,19 @@ def vote():
             request.form['hot'] not in ['Hot', 'Not']:
         return handle_exception(None)
 
+    hot = False
+    if request.form['hot'] == 'Hot':
+        hot = True
+
     print(lang, request.form['hot'])
 
-    with open('results.dat', 'a') as fp:
-        fp.write(lang + ' ' + request.form['hot'] + '\n')
+    # Put vote in database
+    with psycopg2.connect(DATABASE_URL, sslmode='require') as conn:
+        with conn.cursor() as cursor:
+            insert_query = """INSERT INTO votes(language, hot)\
+                                VALUES (%s, %s);"""
+            cursor.execute(insert_query,(lang, hot));
+            conn.commit()
 
     session['langi'] += 1
     return redirect(url_for('index'))
