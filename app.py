@@ -2,12 +2,20 @@ import random
 import os
 import hashlib
 import time
-import psycopg2
+import json
+
 from collections import defaultdict
 
 from flask import Flask, request, render_template
 from flask import redirect, session, make_response, url_for
 from werkzeug.exceptions import HTTPException
+
+import psycopg2
+import numpy as np
+import pandas as pd
+import plotly
+import plotly.graph_objects as go
+import plotly.express as px
 
 
 app = Flask(__name__)
@@ -48,6 +56,38 @@ funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
                      505, 503, 501, 529]
 
 
+def gen_res_graph(results):
+    d = {'Who': [row[0] for row in results],
+     'Hot': [row[1] for row in results],
+     'Not': [row[2] for row in results],}
+
+    df = pd.DataFrame(d)
+
+    fig = go.Figure()
+    for col in df.columns[1:2]:
+        fig.add_trace(go.Bar(x=df[col].values,
+                             y=df['Who'],
+                             orientation='h',
+                             name=col,
+                             customdata=df[col],
+                             hovertemplate = "%{y}: %{customdata}"))
+    for col in df.columns[2:3]:
+        fig.add_trace(go.Bar(x=-df[col],
+                             y=df['Who'],
+                             orientation='h',
+                             name= col,
+                             customdata=df[col],
+                             hovertemplate = "%{y}: %{customdata}"))
+
+    fig.update_layout(barmode='relative',
+                      yaxis_autorange='reversed',
+                      bargap=0.02,
+                     )
+
+    graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
+    return graphJSON
+
+
 @app.route('/results')
 def results():
     count_hots_and_nots_query = "SELECT language, \
@@ -59,9 +99,9 @@ def results():
     with psycopg2.connect(DATABASE_URL, sslmode='require') as conn:
         with conn.cursor() as cursor:
             cursor.execute(count_hots_and_nots_query)
-            res = cursor.fetchall()
+            results = cursor.fetchall()
 
-    return render_template('results.html', res=res)
+    return render_template('results.html', graph=gen_res_graph(results))
 
 
 @app.errorhandler(HTTPException)
