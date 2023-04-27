@@ -5,12 +5,14 @@ import time
 import json
 
 from collections import defaultdict
+from secrets import token_urlsafe
 
 from flask import Flask, request, render_template
 from flask import redirect, session, make_response, url_for
+from flask import send_from_directory
 from werkzeug.exceptions import HTTPException
 
-import psycopg2
+import sqlite3
 import numpy as np
 import pandas as pd
 import plotly
@@ -21,13 +23,13 @@ import plotly.express as px
 app = Flask(__name__)
 
 
-try:
-    DATABASE_URL = os.environ['DATABASE_URL']
-    SESSION_KEY = os.environ['HOB_SESS_SEED']
-    app.secret_key = os.environ['HOB_SESS_SEED'].encode('utf-8')
-except KeyError:
-    print("Couldn't find some env vars. Are (all of) them set?")
-    exit(1)
+DB_FILE = "database.db"
+CREATE_VOTES_TABLE = """ CREATE TABLE IF NOT EXISTS votes (
+                            userid VARCHAR(64),
+                            language VARCHAR(20),
+                            hot BOOL,
+                            PRIMARY KEY (userid, language)
+                        ); """
 
 
 # lang, hot, not
@@ -54,6 +56,22 @@ langs = set(['Python',
 
 funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
                      505, 503, 501, 529]
+
+app.secret_key = token_urlsafe(64)
+
+def run_db_query(query_str, fetch_query=False):
+    result = []
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            cursor = conn.cursor()
+            res = cursor.execute(query_str)
+            if fetch_query:
+                result = res.fetchall()
+            conn.commit()
+    except e:
+        print(e)
+
+    return result
 
 
 def gen_res_graph(results):
@@ -88,6 +106,18 @@ def gen_res_graph(results):
     return graphJSON
 
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                          'favicon.ico')
+
+
+@app.route('/styles.css')
+def stylesheet():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                          'styles.css')
+
+
 @app.route('/results')
 def results():
     count_hots_and_nots_query = "SELECT language, \
@@ -96,16 +126,14 @@ def results():
                                 FROM votes GROUP BY language \
                                 ORDER BY hot DESC, not_hot ASC;"
 
-    with psycopg2.connect(DATABASE_URL, sslmode='require') as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(count_hots_and_nots_query)
-            results = cursor.fetchall()
+    results = run_db_query(count_hots_and_nots_query, fetch_query=True)
 
     return render_template('results.html', graph=gen_res_graph(results))
 
 
 @app.errorhandler(HTTPException)
 def handle_exception(e):
+    print(e)
     return render_template('error.html'), random.choice(funny_distractors)
 
 
@@ -129,12 +157,10 @@ def vote():
     print(lang, request.form['hot'])
 
     # Put vote in database
-    with psycopg2.connect(DATABASE_URL, sslmode='require') as conn:
-        with conn.cursor() as cursor:
-            insert_query = """INSERT INTO votes(language, hot)\
-                                VALUES (%s, %s);"""
-            cursor.execute(insert_query,(lang, hot));
-            conn.commit()
+    insert_query = f"""INSERT INTO votes(userid, language, hot)\
+                        VALUES ('{session['userid']}', '{lang}', {hot});"""
+    print(f"inserting: {insert_query}")
+    run_db_query(insert_query)
 
     session['langi'] += 1
     return redirect(url_for('index'))
@@ -144,7 +170,7 @@ def vote():
 def index():
     if 'userid' not in session:
         ts = str(time.time())
-        full_key = (ts+SESSION_KEY).encode('utf-8')
+        full_key = (ts+token_urlsafe(64)).encode('utf-8')
         session['userid'] = hashlib.sha512(full_key).hexdigest()
         session['langi'] = 0
 
@@ -158,6 +184,7 @@ def index():
 
 if __name__ == '__main__':
     random.seed()
+    run_db_query(CREATE_VOTES_TABLE)
     app.run()
 
 

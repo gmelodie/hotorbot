@@ -1,7 +1,6 @@
 flask
 werkzeug
 gunicorn
-psycopg2
 numpy
 pandas
 plotly

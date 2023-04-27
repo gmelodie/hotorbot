@@ -1,2 +1,4 @@
 .venv
+venv
 results.dat
+database.db

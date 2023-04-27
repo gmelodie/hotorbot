@@ -4,19 +4,16 @@
 {% block content %}
 
 <form action="/vote" method="post">
-  <br>
-  <h3 class="text-info"> {{ lang }} </h3>
-  <br>
-  <div class="row justify-content-center">
-    <input type="submit" class="col-4 col-md-3 btn btn-secondary" name="hot" value="Not"></input>
-    <input type="submit" class="col-4 col-md-3 btn btn-danger" name="hot" value="Hot"></input>
-    <input type="hidden" name="lang" value="{{ lang }}">
-  </div>
+    <div class="container">
+        <div class="card">
+            <h2>{{ lang }}</h2>
+            <div class="button-container">
+                <button type="submit" name="hot" value="Hot" class="button dislike">Not</button>
+                <button type="submit" name="hot" value="Not" class="button like">Bot</button>
+                <input type="hidden" name="lang" value="{{ lang }}">
+            </div>
+        </div>
+    </div>
 </form>
-<br>
-<div class="row justify-content-center">
-  <a href="/results" class="col-4 col-md-4 btn btn-primary">Results</a>
-</div>
-
 
 {% endblock %}
