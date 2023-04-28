@@ -7,10 +7,11 @@ import json
 from collections import defaultdict
 from secrets import token_urlsafe
 
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, send_from_directory
 from flask import redirect, session, make_response, url_for
 from flask import send_from_directory
 from werkzeug.exceptions import HTTPException
+from flask_sslify import SSLify
 
 import sqlite3
 import numpy as np
@@ -21,6 +22,7 @@ import plotly.express as px
 
 
 app = Flask(__name__)
+sslify = SSLify(app)
 
 
 DB_FILE = "database.db"
