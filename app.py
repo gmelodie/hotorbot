@@ -70,7 +70,7 @@ def run_db_query(query_str, fetch_query=False):
             if fetch_query:
                 result = res.fetchall()
             conn.commit()
-    except e:
+    except Exception as e:
         print(e)
 
     return result
@@ -141,6 +141,9 @@ def handle_exception(e):
 
 @app.route('/vote', methods=['POST'])
 def vote():
+    # if user does not have a cookie, give'em one
+    if 'userid' not in session:
+        return handle_exception(None)
 
     # Check input (no funky stuff)
     if 'lang' not in request.form or 'hot' not in request.form:
@@ -170,6 +173,7 @@ def vote():
 
 @app.route('/')
 def index():
+    # if user does not have a cookie, give'em one
     if 'userid' not in session:
         ts = str(time.time())
         full_key = (ts+token_urlsafe(64)).encode('utf-8')
