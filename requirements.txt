@@ -5,3 +5,5 @@ numpy
 pandas
 plotly
 flask-sslify
+flask-session
+

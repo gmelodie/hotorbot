@@ -2,3 +2,5 @@
 venv
 results.dat
 database.db
+flask_session/
+__pycache__/

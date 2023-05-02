@@ -3,6 +3,7 @@ import os
 import hashlib
 import time
 import json
+import logging
 
 from collections import defaultdict
 from secrets import token_urlsafe
@@ -10,6 +11,7 @@ from secrets import token_urlsafe
 from flask import Flask, request, render_template, send_from_directory
 from flask import redirect, session, make_response, url_for
 from flask import send_from_directory
+from flask_session import Session
 from werkzeug.exceptions import HTTPException
 from flask_sslify import SSLify
 
@@ -20,9 +22,14 @@ import plotly
 import plotly.graph_objects as go
 import plotly.express as px
 
-
 app = Flask(__name__)
+app.logger.setLevel(logging.ERROR)
 sslify = SSLify(app)
+
+app.secret_key = b'' # SET THIS (e.g. b'_5#lRL"F4Q8z\n\xec]/')
+
+app.config['SESSION_TYPE'] = 'filesystem'
+Session(app)
 
 
 DB_FILE = "database.db"
@@ -34,7 +41,7 @@ CREATE_VOTES_TABLE = """ CREATE TABLE IF NOT EXISTS votes (
                         ); """
 
 
-# lang, hot, not
+# lang, hot, bot
 langs = set(['Python',
          'Rust',
          'PHP',
@@ -63,23 +70,19 @@ app.secret_key = token_urlsafe(64)
 
 def run_db_query(query_str, fetch_query=False):
     result = []
-    try:
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            res = cursor.execute(query_str)
-            if fetch_query:
-                result = res.fetchall()
-            conn.commit()
-    except Exception as e:
-        print(e)
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        res = cursor.execute(query_str)
+        if fetch_query:
+            result = res.fetchall()
+        conn.commit()
 
     return result
 
-
 def gen_res_graph(results):
     d = {'Who': [row[0] for row in results],
-     'Hot': [row[1] for row in results],
-     'Not': [row[2] for row in results],}
+         'Bot': [row[1] for row in results],
+         'Hot': [row[2] for row in results],}
 
     df = pd.DataFrame(d)
 
@@ -90,22 +93,33 @@ def gen_res_graph(results):
                              orientation='h',
                              name=col,
                              customdata=df[col],
-                             hovertemplate = "%{y}: %{customdata}"))
+                             hovertemplate = "%{y}: %{customdata}",
+                             showlegend=False,
+                             marker=dict(color='#F6AA1C')
+                             ))
     for col in df.columns[2:3]:
         fig.add_trace(go.Bar(x=-df[col],
                              y=df['Who'],
                              orientation='h',
                              name= col,
                              customdata=df[col],
-                             hovertemplate = "%{y}: %{customdata}"))
+                             hovertemplate = "%{y}: %{customdata}",
+                             showlegend=False,
+                             marker=dict(color='#FF4D4D')
+                             ))
 
     fig.update_layout(barmode='relative',
                       yaxis_autorange='reversed',
                       bargap=0.02,
-                     )
+                      plot_bgcolor='rgba(0,0,0,0)',
+                      paper_bgcolor='rgba(0,0,0,0)',
+                      hoverlabel=dict(bgcolor="white", font_size=12, font_family="Arial"),
+                      xaxis=dict(showticklabels=False),
+                      )
 
     graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
     return graphJSON
+
 
 
 @app.route('/favicon.ico')
@@ -122,20 +136,20 @@ def stylesheet():
 
 @app.route('/results')
 def results():
-    count_hots_and_nots_query = "SELECT language, \
-                                COUNT(CASE WHEN hot THEN 1 END) as hot, \
-                                COUNT(CASE WHEN NOT hot THEN 1 END) as not_hot \
+    count_hots_and_bots_query = "SELECT language, \
+                                COUNT(CASE WHEN NOT hot THEN 1 END) as not_hot, \
+                                COUNT(CASE WHEN hot THEN 1 END) as hot \
                                 FROM votes GROUP BY language \
                                 ORDER BY hot DESC, not_hot ASC;"
 
-    results = run_db_query(count_hots_and_nots_query, fetch_query=True)
+    results = run_db_query(count_hots_and_bots_query, fetch_query=True)
 
     return render_template('results.html', graph=gen_res_graph(results))
 
 
 @app.errorhandler(HTTPException)
 def handle_exception(e):
-    print(e)
+    app.logger.error(e)
     return render_template('error.html'), random.choice(funny_distractors)
 
 
@@ -143,7 +157,7 @@ def handle_exception(e):
 def vote():
     # if user does not have a cookie, give'em one
     if 'userid' not in session:
-        return handle_exception(None)
+        return handle_exception(HTTPException("userid not in session"))
 
     # Check input (no funky stuff)
     if 'lang' not in request.form or 'hot' not in request.form:
@@ -152,7 +166,7 @@ def vote():
     lang = request.form['lang']
 
     if lang not in langs or \
-            request.form['hot'] not in ['Hot', 'Not']:
+            request.form['hot'] not in ['Hot', 'Bot']:
         return handle_exception(None)
 
     hot = False
@@ -188,9 +202,17 @@ def index():
     return render_template('index.html', lang=list(langs)[i])
 
 
+
+random.seed()
+
+# if database file does not exist, create it:
+if not os.path.isfile(DB_FILE):
+    open(DB_FILE, 'w')
+run_db_query(CREATE_VOTES_TABLE)
+
+
+
 if __name__ == '__main__':
-    random.seed()
-    run_db_query(CREATE_VOTES_TABLE)
     app.run()
 
 
