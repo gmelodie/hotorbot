@@ -1,9 +1,9 @@
 flask
+cachelib
 werkzeug
 gunicorn
 numpy
 pandas
 plotly
-flask-sslify
 flask-session
 

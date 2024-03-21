@@ -5,28 +5,28 @@ import time
 import json
 import logging
 
-from collections import defaultdict
 from secrets import token_urlsafe
 
 from flask import Flask, request, render_template, send_from_directory
 from flask import redirect, session, make_response, url_for
-from flask import send_from_directory
 from flask_session import Session
 from werkzeug.exceptions import HTTPException
-from flask_sslify import SSLify
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sqlite3
-import numpy as np
 import pandas as pd
 import plotly
 import plotly.graph_objects as go
-import plotly.express as px
 
 app = Flask(__name__)
-app.logger.setLevel(logging.ERROR)
-sslify = SSLify(app)
 
-app.secret_key = b'' # SET THIS (e.g. b'_5#lRL"F4Q8z\n\xec]/')
+app.config['DEBUG'] = os.environ.get('DEBUG', False)
+app.logger.setLevel(logging.ERROR)
+
+# tell flask it's behind a proxy (nginx)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+)
 
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
@@ -68,11 +68,11 @@ funny_distractors = [100, 200, 201, 203, 300, 303, 400, 404, 401, 500,
 
 app.secret_key = token_urlsafe(64)
 
-def run_db_query(query_str, fetch_query=False):
+def run_db_query(query_str, parameters=(), fetch_query=False):
     result = []
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        res = cursor.execute(query_str)
+        res = cursor.execute(query_str, parameters)
         if fetch_query:
             result = res.fetchall()
         conn.commit()
@@ -176,10 +176,9 @@ def vote():
     print(lang, request.form['hot'])
 
     # Put vote in database
-    insert_query = f"""INSERT INTO votes(userid, language, hot)\
-                        VALUES ('{session['userid']}', '{lang}', {hot});"""
+    insert_query = "INSERT INTO votes(userid, language, hot) VALUES (?, ?, ?);"
     print(f"inserting: {insert_query}")
-    run_db_query(insert_query)
+    run_db_query(insert_query, parameters=(session['userid'], lang, hot), fetch_query=False)
 
     session['langi'] += 1
     return redirect(url_for('index'))
@@ -213,7 +212,7 @@ run_db_query(CREATE_VOTES_TABLE)
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(port=5001)
 
 
 

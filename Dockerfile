@@ -14,6 +14,6 @@ EXPOSE 5000
 
 ENV FLASK_ENV=production
 
-CMD ["gunicorn", "app:app", "-b", "0.0.0.0:5000", "-w", "4"]
+CMD ["gunicorn", "app:app", "--timeout", "120", "-b", "0.0.0.0:5000", "-w", "2"]
 
 
